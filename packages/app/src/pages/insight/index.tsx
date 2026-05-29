@@ -18,6 +18,13 @@ import { SDKProvider } from "@/context/sdk"
 import { SyncProvider, useSync } from "@/context/sync"
 import { Identifier } from "@/utils/id"
 import { Icon } from "@opencode-ai/ui/icon"
+import { ModelsProvider } from "@/context/models"
+import { LocalProvider } from "@/context/local"
+import { ModelSelectorPopover } from "@/components/dialog-select-model"
+import {
+  InsightModelSelectionProvider,
+  useInsightModelSelection,
+} from "./store/model-selection"
 import { AttachmentBar, type Attachment } from "./components/attachment-bar"
 import { InsightTurn, type OutputCard } from "./components/insight-turn"
 import { PresetPrompts } from "./components/preset-prompts"
@@ -52,7 +59,16 @@ export default function InsightPage() {
       {(dir) => (
         <SDKProvider directory={() => dir}>
           <SyncProvider>
-            <InsightContent />
+            <ModelsProvider>
+              {/* LocalProvider:为 ModelSelectorPopover 内懒加载的 dialog-manage-models /
+                  dialog-select-provider 提供 useLocal()(用于全局模型可见性管理 UI)。
+                  我们在主流程里读的是 useInsightModelSelection,跟 useLocal 隔离。 */}
+              <LocalProvider>
+                <InsightModelSelectionProvider>
+                  <InsightContent />
+                </InsightModelSelectionProvider>
+              </LocalProvider>
+            </ModelsProvider>
           </SyncProvider>
         </SDKProvider>
       )}
@@ -66,6 +82,7 @@ function InsightContent() {
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const sync = useSync()
+  const selection = useInsightModelSelection()
 
   const homeDir = () => globalSync.data.path.home
 
@@ -332,14 +349,21 @@ function InsightContent() {
     const messageID = Identifier.ascending("message")
     const agent = "insight"
 
+    // 当前 insight 选中的模型(来自 useInsightModelSelection,workspace 级持久化)
+    const currentModel = selection.model.current()
+    const model = currentModel ? {
+      modelID: currentModel.id,
+      providerID: currentModel.provider.id,
+    } : undefined
+
     // optimistic user message —— 立即写入 sync.data,UI 瞬时反馈
     // directory 不传 → 默认走 SDKProvider 注入的 homeDir;model 不传 → 服务端按 agent 默认配置
-    // model/variant 暂不传(等内网 agent-scoped 模型方案落地后再接,见会话决策)
     const optimisticMessage: Message = {
       id: messageID,
       sessionID: sessionId,
       role: "user",
       time: { created: Date.now() },
+      model,
     } as Message
     const optimisticPart: Part = {
       id: Identifier.ascending("part"),
@@ -382,6 +406,7 @@ function InsightContent() {
       await globalSDK.client.session.promptAsync({
         sessionID: sessionId,
         agent,
+        model,
         parts: [textPart],
         messageID,
       })
@@ -823,22 +848,21 @@ function InsightContent() {
                           <Icon name="plus" class="size-5" />
                         </button>
 
-                        {/* 模型切换胶囊(disabled 占位):等内网 agent-scoped 模型方案落地后接入 */}
-                        <div
-                          class="flex items-center gap-1 px-3 h-8 rounded-full text-[13px] select-none"
-                          style={{
-                            border: "1px solid var(--octo-border-default)",
-                            color: "var(--octo-text-secondary)",
-                            background: "var(--octo-surface-page)",
-                            cursor: "not-allowed",
-                            opacity: 0.7,
+                        <ModelSelectorPopover
+                          model={selection.model}
+                          triggerAs="button"
+                          triggerProps={{
+                            class: "flex items-center gap-1.5 min-w-0 max-w-[200px] bg-[#f3f3f3] hover:bg-[#e8e8e8] active:bg-[#dedede] transition-colors px-3 py-1.5 rounded-full text-[13px] text-gray-800 font-medium group",
+                            "data-action": "prompt-model",
                           }}
-                          aria-disabled="true"
-                          title="模型选择(暂不可切换)"
+                          onClose={() => { requestAnimationFrame(() => textareaRef?.focus()) }}
                         >
-                          <span>DeepSeek-V4-Pro</span>
-                          <Icon name="chevron-down" class="size-3.5" />
-                        </div>
+                          {/* 不渲染 ProviderIcon:跟底部输入区/UXAI chat 一致 */}
+                          <span class="truncate">
+                            {selection.model.current()?.name ?? "选择模型"}
+                          </span>
+                          <Icon name="chevron-down" class="size-3.5 shrink-0 opacity-60" />
+                        </ModelSelectorPopover>
 
                         <button
                           type="button"
@@ -971,7 +995,22 @@ function InsightContent() {
                       <Icon name="plus" class="size-5" />
                     </button>
 
-                    {/* 模型切换胶囊位:等内网 agent-scoped 模型方案落地后接入,见 SPEC TODO */}
+                    <ModelSelectorPopover
+                      model={selection.model}
+                      triggerAs="button"
+                      triggerProps={{
+                        class: "flex items-center gap-1.5 min-w-0 max-w-[200px] bg-[#f3f3f3] hover:bg-[#e8e8e8] active:bg-[#dedede] transition-colors px-3 py-1.5 rounded-full text-[13px] text-gray-800 font-medium group",
+                        "data-action": "prompt-model",
+                      }}
+                      onClose={() => { requestAnimationFrame(() => textareaRef?.focus()) }}
+                    >
+                      {/* 不渲染 ProviderIcon:内网自部署的 provider id 不在 ui sprite 内会落到
+                          synthetic 占位图标,跟 UXAI chat 一致(屏蔽 icon 只显示模型名)。 */}
+                      <span class="truncate">
+                        {selection.model.current()?.name ?? "选择模型"}
+                      </span>
+                      <Icon name="chevron-down" class="size-3.5 shrink-0 opacity-60" />
+                    </ModelSelectorPopover>
 
                     <button
                       type="button"

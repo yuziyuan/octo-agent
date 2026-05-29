@@ -10,7 +10,6 @@ import {
   For,
   on,
   Show,
-  type JSX,
 } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useGlobalSDK } from "@/context/global-sdk"
@@ -734,16 +733,133 @@ function InsightContent() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-            {/* 消息列表（autoScroll 挂在 scrollRef 容器，contentRef 挂在内容 div） */}
-            <div
-              class="flex-1 overflow-y-auto min-h-0"
-              ref={autoScroll.scrollRef}
-              onScroll={autoScroll.handleScroll}
-              onMouseUp={autoScroll.handleInteraction}
+            <Show
+              when={params.id && userMessages().length > 0}
+              fallback={
+                <div class="size-full flex flex-col items-center justify-center px-8 py-10 overflow-y-auto">
+                  <IllustrationInsightEmpty width={166} height={166} />
+                  <div
+                    style={{
+                      "margin-top": "12px",
+                      "font-size": "36px",
+                      "font-weight": "600",
+                      "line-height": "1.2",
+                      color: "var(--octo-text-strong)",
+                    }}
+                  >
+                    Octo Insight
+                  </div>
+                  <div
+                    style={{
+                      "margin-top": "8px",
+                      "font-size": "16px",
+                      color: "var(--octo-text-secondary)",
+                    }}
+                  >
+                    AI辅助用户洞察研究
+                  </div>
+
+                  <div style={{ "margin-top": "80px", width: "100%", "max-width": "800px" }}>
+                    <AttachmentBar
+                      attachments={attachments()}
+                      onRemove={removeAttachment}
+                      onRetry={retryUpload}
+                    />
+
+                    <div
+                      class="rounded-[24px] transition-all duration-300 relative group flex flex-col"
+                      style={{
+                        border: "1px solid transparent",
+                        background: `
+                          linear-gradient(var(--octo-surface-page), var(--octo-surface-page)) padding-box,
+                          linear-gradient(135deg,
+                            rgba(246, 97, 23, 1) 1%,
+                            rgba(95, 45, 255, 1) 8%,
+                            rgba(61, 93, 255, 1) 22%,
+                            rgba(104, 138, 255, 1) 43%,
+                            rgba(28, 171, 111, 1) 54%,
+                            rgba(61, 93, 255, 1) 87%,
+                            rgba(206, 7, 232, 1) 92%) border-box`,
+                        "box-shadow": "0 0 5px rgba(0, 0, 0, 0.08), 0 0 10px rgba(74, 81, 255, 0.18), 0 0 20px rgba(89, 74, 255, 0.12)",
+                        height: "150px",
+                        "margin-top": attachments().length > 0 ? "6px" : "0",
+                      }}
+                    >
+                      <textarea
+                        ref={textareaRef!}
+                        value={prompt()}
+                        onInput={(e) => setPrompt(e.currentTarget.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="请描述您的需求..."
+                        class="w-full flex-1 resize-none px-4 pt-3 bg-transparent text-sm outline-none relative z-10"
+                        style={{
+                          color: "var(--octo-text-primary)",
+                          "font-family": "var(--octo-font)",
+                          "overflow-y": "auto",
+                        }}
+                      />
+
+                      <div class="flex items-center gap-2 px-2.5 pb-2.5 relative z-10">
+                        <input
+                          ref={fileInputRef!}
+                          type="file"
+                          multiple
+                          class="hidden"
+                          accept="*/*"
+                          onChange={handleFileInputChange}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { if (!maxAttachments()) fileInputRef.click() }}
+                          disabled={maxAttachments()}
+                          class="flex flex-shrink-0 items-center justify-center size-8 rounded-full transition-colors hover:bg-black/5 active:bg-black/10 text-gray-800 hover:text-black disabled:text-gray-400"
+                          title={maxAttachments() ? "最多 5 个文件" : "添加附件"}
+                        >
+                          <Icon name="plus" class="size-5" />
+                        </button>
+
+                        {/* 模型切换胶囊(disabled 占位):等内网 agent-scoped 模型方案落地后接入 */}
+                        <div
+                          class="flex items-center gap-1 px-3 h-8 rounded-full text-[13px] select-none"
+                          style={{
+                            border: "1px solid var(--octo-border-default)",
+                            color: "var(--octo-text-secondary)",
+                            background: "var(--octo-surface-page)",
+                            cursor: "not-allowed",
+                            opacity: 0.7,
+                          }}
+                          aria-disabled="true"
+                          title="模型选择(暂不可切换)"
+                        >
+                          <span>DeepSeek-V4-Pro</span>
+                          <Icon name="chevron-down" class="size-3.5" />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleSubmit()}
+                          disabled={!prompt().trim() || hasUploadingAttachments()}
+                          title={hasUploadingAttachments() ? "请等待附件上传完成" : (isBusy() ? "LLM 响应中,发送会进入排队" : undefined)}
+                          class="flex flex-shrink-0 items-center justify-center ml-auto bg-transparent border-0 p-0 transition-opacity duration-200 disabled:cursor-not-allowed"
+                          style={{
+                            opacity: (!prompt().trim() || hasUploadingAttachments()) ? 0.4 : 1,
+                            filter: (!prompt().trim() || hasUploadingAttachments()) ? "grayscale(0.5)" : "none",
+                          }}
+                        >
+                          <IconSendBlue width={40} height={40} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
             >
-              <Show
-                when={params.id && userMessages().length > 0}
-                fallback={<ChatEmptyState />}
+              {/* 消息列表（autoScroll 挂在 scrollRef 容器，contentRef 挂在内容 div） */}
+              <div
+                class="flex-1 overflow-y-auto min-h-0"
+                ref={autoScroll.scrollRef}
+                onScroll={autoScroll.handleScroll}
+                onMouseUp={autoScroll.handleInteraction}
               >
                 <div ref={autoScroll.contentRef} class="py-3 flex flex-col gap-0">
                   <For each={userMessages()}>
@@ -763,112 +879,112 @@ function InsightContent() {
                     )}
                   </For>
                 </div>
-              </Show>
-            </div>
+              </div>
 
-            {/* 输入区 */}
-            <div class="shrink-0 p-4">
-              <AttachmentBar
-                attachments={attachments()}
-                onRemove={removeAttachment}
-                onRetry={retryUpload}
-              />
-
-              {/* 队列提示条:busy 时点了发送会先入队,这里给反馈 (SPEC-INS-007 §3.3.4) */}
-              <Show when={queuedText()}>
-                <div class="octo-queue-banner">
-                  <span class="octo-queue-banner-label">排队中</span>
-                  <span class="octo-queue-banner-text">{queuedText()}</span>
-                  <button
-                    type="button"
-                    onClick={cancelQueued}
-                    class="octo-queue-banner-cancel"
-                    title="取消并恢复到输入框"
-                    aria-label="取消排队"
-                  >
-                    ×
-                  </button>
-                </div>
-              </Show>
-
-              {/* 预置提示词按钮 (SPEC-INS-007 §3.1.3):放在输入框白卡片之外,
-                  视觉层级:辅助操作浮在输入框上方,与卡片解耦 */}
-              <PresetPrompts
-                prompts={PRESET_PROMPTS}
-                onClick={handlePresetClick}
-              />
-
-              <div
-                class="rounded-[var(--octo-radius-lg)] transition-all duration-300 relative group"
-                style={{
-                  border: "1px solid transparent",
-                  background: `
-                    linear-gradient(var(--octo-surface-page), var(--octo-surface-page)) padding-box,
-                    linear-gradient(135deg,
-                      rgba(246, 97, 23, 0.7) 1%,
-                      rgba(95, 45, 255, 0.7) 8%,
-                      rgba(61, 93, 255, 0.7) 22%,
-                      rgba(104, 138, 255, 0.7) 43%,
-                      rgba(28, 171, 111, 0.7) 54%,
-                      rgba(61, 93, 255, 0.7) 87%,
-                      rgba(206, 7, 232, 0.7) 92%) border-box`,
-                  "box-shadow": "0 0 5px rgba(0, 0, 0, 0.08), 0 0 10px rgba(74, 81, 255, 0.18), 0 0 20px rgba(89, 74, 255, 0.12)",
-                  "margin-top": attachments().length > 0 ? "6px" : "0",
-                }}
-              >
-                <textarea
-                  ref={textareaRef!}
-                  value={prompt()}
-                  onInput={(e) => setPrompt(e.currentTarget.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="上传评估任务书、逐字稿，智能整理问题和观点"
-                  rows={3}
-                  class="w-full resize-none px-3 pt-2.5 pb-2 bg-transparent text-sm outline-none relative z-10"
-                  style={{
-                    color: "var(--octo-text-primary)",
-                    "font-family": "var(--octo-font)",
-                    "max-height": "120px",
-                    "overflow-y": "auto",
-                  }}
+              {/* 输入区 */}
+              <div class="shrink-0 p-4">
+                <AttachmentBar
+                  attachments={attachments()}
+                  onRemove={removeAttachment}
+                  onRetry={retryUpload}
                 />
 
-                <div class="flex items-center gap-2 px-2.5 pb-2.5 relative z-10">
-                  <input
-                    ref={fileInputRef!}
-                    type="file"
-                    multiple
-                    class="hidden"
-                    accept="*/*"
-                    onChange={handleFileInputChange}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { if (!maxAttachments()) fileInputRef.click() }}
-                    disabled={maxAttachments()}
-                    class="flex flex-shrink-0 items-center justify-center size-8 rounded-full transition-colors hover:bg-black/5 active:bg-black/10 text-gray-800 hover:text-black disabled:text-gray-400"
-                    title={maxAttachments() ? "最多 5 个文件" : "添加附件"}
-                  >
-                    <Icon name="plus" class="size-5" />
-                  </button>
+                {/* 队列提示条:busy 时点了发送会先入队,这里给反馈 (SPEC-INS-007 §3.3.4) */}
+                <Show when={queuedText()}>
+                  <div class="octo-queue-banner">
+                    <span class="octo-queue-banner-label">排队中</span>
+                    <span class="octo-queue-banner-text">{queuedText()}</span>
+                    <button
+                      type="button"
+                      onClick={cancelQueued}
+                      class="octo-queue-banner-cancel"
+                      title="取消并恢复到输入框"
+                      aria-label="取消排队"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </Show>
 
-                  {/* 模型切换胶囊位:等内网 agent-scoped 模型方案落地后接入,见 SPEC TODO */}
+                {/* 预置提示词按钮 (SPEC-INS-007 §3.1.3):放在输入框白卡片之外,
+                    视觉层级:辅助操作浮在输入框上方,与卡片解耦 */}
+                <PresetPrompts
+                  prompts={PRESET_PROMPTS}
+                  onClick={handlePresetClick}
+                />
 
-                  <button
-                    type="button"
-                    onClick={() => void handleSubmit()}
-                    disabled={!prompt().trim() || hasUploadingAttachments()}
-                    title={hasUploadingAttachments() ? "请等待附件上传完成" : (isBusy() ? "LLM 响应中,发送会进入排队" : undefined)}
-                    class="flex flex-shrink-0 items-center justify-center ml-auto bg-transparent border-0 p-0 transition-opacity duration-200 disabled:cursor-not-allowed"
+                <div
+                  class="rounded-[var(--octo-radius-lg)] transition-all duration-300 relative group"
+                  style={{
+                    border: "1px solid transparent",
+                    background: `
+                      linear-gradient(var(--octo-surface-page), var(--octo-surface-page)) padding-box,
+                      linear-gradient(135deg,
+                        rgba(246, 97, 23, 0.7) 1%,
+                        rgba(95, 45, 255, 0.7) 8%,
+                        rgba(61, 93, 255, 0.7) 22%,
+                        rgba(104, 138, 255, 0.7) 43%,
+                        rgba(28, 171, 111, 0.7) 54%,
+                        rgba(61, 93, 255, 0.7) 87%,
+                        rgba(206, 7, 232, 0.7) 92%) border-box`,
+                    "box-shadow": "0 0 5px rgba(0, 0, 0, 0.08), 0 0 10px rgba(74, 81, 255, 0.18), 0 0 20px rgba(89, 74, 255, 0.12)",
+                    "margin-top": attachments().length > 0 ? "6px" : "0",
+                  }}
+                >
+                  <textarea
+                    ref={textareaRef!}
+                    value={prompt()}
+                    onInput={(e) => setPrompt(e.currentTarget.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="上传评估任务书、逐字稿，智能整理问题和观点"
+                    rows={3}
+                    class="w-full resize-none px-3 pt-2.5 pb-2 bg-transparent text-sm outline-none relative z-10"
                     style={{
-                      opacity: (!prompt().trim() || hasUploadingAttachments()) ? 0.4 : 1,
-                      filter: (!prompt().trim() || hasUploadingAttachments()) ? "grayscale(0.5)" : "none",
+                      color: "var(--octo-text-primary)",
+                      "font-family": "var(--octo-font)",
+                      "max-height": "120px",
+                      "overflow-y": "auto",
                     }}
-                  >
-                    <IconSendBlue width={40} height={40} />
-                  </button>
+                  />
+
+                  <div class="flex items-center gap-2 px-2.5 pb-2.5 relative z-10">
+                    <input
+                      ref={fileInputRef!}
+                      type="file"
+                      multiple
+                      class="hidden"
+                      accept="*/*"
+                      onChange={handleFileInputChange}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { if (!maxAttachments()) fileInputRef.click() }}
+                      disabled={maxAttachments()}
+                      class="flex flex-shrink-0 items-center justify-center size-8 rounded-full transition-colors hover:bg-black/5 active:bg-black/10 text-gray-800 hover:text-black disabled:text-gray-400"
+                      title={maxAttachments() ? "最多 5 个文件" : "添加附件"}
+                    >
+                      <Icon name="plus" class="size-5" />
+                    </button>
+
+                    {/* 模型切换胶囊位:等内网 agent-scoped 模型方案落地后接入,见 SPEC TODO */}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSubmit()}
+                      disabled={!prompt().trim() || hasUploadingAttachments()}
+                      title={hasUploadingAttachments() ? "请等待附件上传完成" : (isBusy() ? "LLM 响应中,发送会进入排队" : undefined)}
+                      class="flex flex-shrink-0 items-center justify-center ml-auto bg-transparent border-0 p-0 transition-opacity duration-200 disabled:cursor-not-allowed"
+                      style={{
+                        opacity: (!prompt().trim() || hasUploadingAttachments()) ? 0.4 : 1,
+                        filter: (!prompt().trim() || hasUploadingAttachments()) ? "grayscale(0.5)" : "none",
+                      }}
+                    >
+                      <IconSendBlue width={40} height={40} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Show>
 
         </div>
 
@@ -913,14 +1029,3 @@ function InsightContent() {
   )
 }
 
-function ChatEmptyState(): JSX.Element {
-  return (
-    <div class="size-full flex flex-col items-center justify-center gap-3 text-center px-8">
-      <IllustrationInsightEmpty width={120} height={120} />
-      <div class="text-[15px] font-semibold" style={{ color: "var(--octo-text-strong)" }}>Octo Insight</div>
-      <div class="text-[13px] max-w-[200px] leading-relaxed" style={{ color: "var(--octo-text-secondary)" }}>
-        上传访谈材料，发送指令开始分析
-      </div>
-    </div>
-  )
-}

@@ -766,6 +766,11 @@ function InsightContent() {
                       onRetry={retryUpload}
                     />
 
+                    <PresetPrompts
+                      prompts={PRESET_PROMPTS}
+                      onClick={handlePresetClick}
+                    />
+
                     <div
                       class="rounded-[24px] transition-all duration-300 relative group flex flex-col"
                       style={{

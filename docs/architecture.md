@@ -298,6 +298,7 @@ opencode 内置 SQLite（Drizzle ORM），数据在：
 | 改了什么 | 性质 |
 |---|---|
 | 新增 `plutil` patch + `codesign --force --deep --sign -` + `lsregister -f` 步骤（保留，对 Dock label 有效） | 对 macOS 菜单栏名称**无效**：electron-vite dev 模式不加载 `.app` bundle，plist 完全不被读取 |
+| 用 `if (process.platform === "darwin") { ... }` 包裹 `plutil` / `codesign` / `lsregister` / `touch` / `killall Dock` 五行 macOS 专属调用（2026-05-28，dev 环境兼容） | 跨平台 — Windows/Linux 上 `plutil` 不存在导致 `bun run dev` 在 predev 阶段 exit 1；包裹后非 macOS 直接跳过 plist 补丁，`copy-icons` 和 `cd ../opencode && bun script/build-node.ts` 保留 |
 
 #### `packages/app/public/assets/insight/`
 
@@ -329,6 +330,20 @@ opencode 内置 SQLite（Drizzle ORM），数据在：
 | 改了什么 | 性质 |
 |---|---|
 | 在 `.env` 一行下追加 `.env.local` / `.env.*.local` 两行 | 配合 `.env.example` 模板使用；vite 官方标准忽略模式，让开发者复制出的本地配置（含真实端点）不会被误提交 |
+
+#### `packages/desktop-electron/electron.vite.config.ts`（补充）
+
+| 改了什么 | 性质 |
+|---|---|
+| `main.build.rollupOptions` 新增 `external: [/\.wasm$/]`（2026-05-28，dev/build 兼容） | 接线 — 主进程通过 `virtual:opencode-server` 引入 `packages/opencode/dist/node/node.js`，该 bundle 内含 `import("…tree-sitter.wasm")` 动态 wasm 导入；Vite 7 默认不处理 ESM-wasm，报 "ESM integration proposal for Wasm is not supported"。外置后 wasm 由运行时从 node_modules 解析（opencode build-node.ts 本身就把 `*.wasm` 列为 external），与 `opencode:copy-server-assets` 插件互补 |
+| `opencode:copy-server-assets` 插件在拷 `.wasm` 之后追加拷贝 `packages/opencode/node_modules/jsonc-parser/lib/umd/impl/*` 到 `out/main/chunks/impl/`，并在该目录写一份 `package.json: {"type":"commonjs"}` 局部 scope override（2026-05-28，dev sidecar 启动修复 + JSONC parse 修复） | 接线 — 两层 bug：(1) Bun bundler 把 jsonc-parser 的 UMD `main.js` 内联进 opencode bundle，但没递归打包其 `./impl/{format,edit,parser,scanner}.js` 这四个相对 require，运行时报 `Cannot find module './impl/format'`，sidecar 启动 unhandled rejection；(2) 拷过去后 `desktop-electron/package.json` 有 `"type":"module"`，Node 把 `chunks/impl/*.js` 这堆 CJS 风格 UMD 文件当 ESM 拒绝 `require()` 加载（ERR_REQUIRE_ESM 被 bundle 内 commonJS shim 吞掉），`require_main()` 返回的子模块全是空对象，表现为 `TypeError: import_jsonc_parser.parse is not a function`，`/provider` `/global/config` 等端点全 500。修法：(a) 拷文件，(b) 同目录写 `{"type":"commonjs"}` 把 impl/ 这一层覆盖成 CJS scope（不影响 chunks 根的 ESM bundle 文件）。不是 Windows 专属 |
+| `opencode:copy-server-assets` 插件追加拷贝 `packages/opencode/migration/` 整树到 `out/migration/`（2026-05-28，dev `/provider` `/global/config` 等端点 500 修复） | 接线 — opencode bundle 里 SQLite migrations 用 `path.join(import.meta.dirname, "../../migration")` 定位迁移文件。在 opencode 原位置 `packages/opencode/dist/node/` 这条路径解析为 `packages/opencode/migration/`（正确），但 electron-vite 把 bundle 重定位到 `out/main/chunks/` 后变成 `out/migration/`（不存在）。`readdirSync` 抛 `ENOENT: scandir 'out/migration'`，opencode `/provider` `/global/config` `/path` `/project` 端点的 effect chain 在初始化 migration 表时全 500，UI 上 chat 区降级隐藏。同样的相对路径资源 bug 模式（参见上一行 jsonc-parser），不是 Windows 专属 |
+
+#### `packages/desktop-electron/resources/default-config.json`（补充）
+
+| 改了什么 | 性质 |
+|---|---|
+| 删掉 `agent.interview-worker` 段（2026-05-28，dev sidecar 500 修复） | 接线 — 该 agent 在 [ADR-005](adr/005-prompt-template-vs-subagent.md) 是 fallback 设想，但 `packages/agent/interview-worker/` 目录从未实际创建，prompt 文件缺失。[config-core.ts:74-81](../packages/desktop-electron/src/main/config-core.ts) 合并时 prompt 缺失只 `console.warn` 不剔除 agent，导致 runtime 配置里出现无 prompt 的瘸腿 subagent，opencode 后端 Zod strict schema 拒收 → `/provider` `/global/config` `/path` `/project` 端点全 500，UI 上 chat 区降级隐藏。以后真要实现 interview-worker subagent 时，先在 `packages/agent/interview-worker/agents/interview-worker.md` 创建 prompt，再同步加回 default-config.json |
 
 #### `packages/desktop-electron/src/preload/index.ts`（补充）
 

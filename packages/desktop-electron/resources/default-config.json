@@ -9,13 +9,6 @@
         "analyze_interview": true,
         "search_reports":    true
       }
-    },
-    "interview-worker": {
-      "mode": "subagent",
-      "description": "对单份已上传访谈文件执行结构化分析，返回 Markdown 表格。由 insight agent 在多文档并行场景下调度。",
-      "tools": {
-        "analyze_interview": true
-      }
     }
   },
   "mcp": {
